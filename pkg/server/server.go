@@ -135,13 +135,8 @@ func (s *registryServer) registerRepository(
 }
 
 func (s *registryServer) registerAPIFactory(ctx context.Context) error {
-	// https://127.0.0.1:5000/v2/library/NAME/blobs/sha256:aabbccdd....
-	apiURLPrefix, err := url.JoinPath(s.remoteURL, "v2")
-	if err != nil {
-		return fmt.Errorf("failed to join API URL: %w", err)
-	}
 	apiFactory, err := NewAPIFactory(
-		ctx, apiURLPrefix, s.insecureSkipTLSVerify)
+		ctx, s.remoteURL, fmt.Sprintf("%v:%v", s.addr, s.port), s.insecureSkipTLSVerify)
 	if err != nil {
 		return fmt.Errorf("failed to create api factory: %w", err)
 	}
@@ -170,11 +165,6 @@ func (p *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		if strings.HasPrefix(path, "/v2/") {
-			p.apiProxy.ServeHTTP(w, r)
-			return
-		}
-
 		for prefix, plainText := range p.plaintextProxyMap {
 			if !strings.HasPrefix(path, prefix) {
 				continue
@@ -202,10 +192,7 @@ func (p *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte("404 NOT FOUND"))
-	logrus.Debugf("default status [404] url [%v] content [NOT FOUND]", r.URL.Path)
+	p.apiProxy.ServeHTTP(w, r)
 }
 
 func (p *registryServer) initServer() error {

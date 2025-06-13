@@ -6,13 +6,14 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 
-	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
 
 type apiFactory struct {
 	remoteURL             *url.URL
+	localRawURL           string
 	insecureSkipTLSVerify bool
 
 	director       func(r *http.Request)
@@ -40,7 +41,7 @@ func (f *apiFactory) defaultDirector(r *http.Request) {
 func (f *apiFactory) defaultModifyResponse(r *http.Response) error {
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		// Dump response debug data
-		b, err := httputil.DumpResponse(r, false)
+		b, err := httputil.DumpResponse(r, true)
 		if err != nil {
 			logrus.Debugf("failed to dump response: %v", err)
 		} else {
@@ -59,14 +60,15 @@ func (f *apiFactory) defaultErrorHandler(w http.ResponseWriter, r *http.Request,
 
 // Factory is the generator factory for SingleReverseProxy Server
 func NewAPIFactory(
-	ctx context.Context, rawURL string, insecure bool,
+	ctx context.Context, remoteURL, localURL string, insecure bool,
 ) (*apiFactory, error) {
-	u, err := url.Parse(rawURL)
+	u, err := url.Parse(remoteURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse target URL: %w", err)
 	}
 	f := &apiFactory{
 		remoteURL:             u,
+		localRawURL:           localURL,
 		insecureSkipTLSVerify: insecure,
 	}
 	f.errorHandler = f.defaultErrorHandler
@@ -74,27 +76,18 @@ func NewAPIFactory(
 	f.modifyResponse = func(r *http.Response) error {
 		defer f.defaultModifyResponse(r)
 
-		location := r.Header.Get("Location")
-		if location == "" {
-			return nil
+		// https://registry.example.com/service/token
+		auth := r.Header.Get("Www-Authenticate")
+		if auth != "" {
+			if strings.HasPrefix(auth, "Bearer realm=") {
+				// TODO:
+				logrus.Debugf("replace response header [%v] the [%v] with [%v]",
+					auth, u.Hostname(), f.localRawURL)
+				auth = strings.ReplaceAll(auth, u.Hostname(), f.localRawURL)
+				r.Header.Set("Www-Authenticate", auth)
+			}
 		}
-		res, err := utils.HttpGet(ctx, location, insecure)
-		if err != nil {
-			logrus.Errorf("%v", err)
-			return err
-		}
-		if err := r.Body.Close(); err != nil {
-			logrus.Errorf("failed to close response: %v", err)
-		}
-		r.Body = res.Body
-		r.Header = res.Header // TODO: Add cache header
-		r.ContentLength = res.ContentLength
-		r.Status = res.Status
-		r.StatusCode = res.StatusCode
-		r.Proto = res.Proto
-		r.Close = res.Close
-		r.ProtoMajor = res.ProtoMajor
-		r.ProtoMinor = res.ProtoMinor
+
 		return nil
 	}
 	f.director = f.defaultDirector

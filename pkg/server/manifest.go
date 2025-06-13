@@ -88,7 +88,9 @@ func NewManifestFactory(
 			logrus.Errorf("failed to close response: %v", err)
 		}
 		r.Body = res.Body
-		r.Header = res.Header // TODO: Add no cache header
+		r.Header = res.Header
+		// Add no-cache headers for manifest response
+		r.Header.Set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate")
 		r.ContentLength = res.ContentLength
 		r.Status = res.Status
 		r.StatusCode = res.StatusCode

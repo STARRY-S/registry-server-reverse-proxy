@@ -87,7 +87,7 @@ func NewBlobsFactory(
 			logrus.Errorf("failed to close response: %v", err)
 		}
 		r.Body = res.Body
-		r.Header = res.Header // TODO: Add cache header
+		r.Header = res.Header // blobs response can be cached
 		r.ContentLength = res.ContentLength
 		r.Status = res.Status
 		r.StatusCode = res.StatusCode
