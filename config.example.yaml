@@ -1,0 +1,27 @@
+bindAddr: 127.0.0.1
+listen: 8080
+cert: ""
+key: ""
+remoteURL: http://registry.example.com
+hookLocation: true
+insecureSkipTLSVerify: false
+credential:
+    usernameEnvKey: REGISTRY_USERNAME
+    passwordEnvKey: REGISTRY_PASSWORD
+repositories:
+    - name: library
+      private: false
+    - name: test1
+      private: true
+    - name: test2
+      private: true
+customRoutes:
+    - prefix: /text
+      plainText:
+        content: This is a plain text response
+        status: 200
+    - prefix: /favicon.ico
+      plainText:
+        content: |
+          404 not found
+        status: 404

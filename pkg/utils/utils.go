@@ -8,7 +8,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -157,4 +159,24 @@ func HttpGet(ctx context.Context, u string, insecure bool) (*http.Response, erro
 		return nil, fmt.Errorf("failed to get http request on %q: %w", u, err)
 	}
 	return res, nil
+}
+
+var (
+	// https://127.0.0.1:5000/v2/library/NAME/manifests/latest
+	manifestURLRegex = regexp.MustCompile(`^/v2/([^/]+)/([^/]+)/manifests/([^/]+)$`)
+	// https://127.0.0.1:5000/v2/library/NAME/blobs/sha256:aabbccdd....
+	blobsURLRegex = regexp.MustCompile(`^/v2/([^/]+)/([^/]+)/blobs/([^/]+)$`)
+)
+
+func DetectURLType(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	if manifestURLRegex.Match([]byte(u.Path)) {
+		return "manifest"
+	} else if blobsURLRegex.Match([]byte(u.Path)) {
+		return "blobs"
+	}
+	return ""
 }

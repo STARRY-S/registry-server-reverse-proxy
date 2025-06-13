@@ -6,111 +6,209 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/config"
+	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 )
 
-type proxyServer struct {
-	addr                  string
-	port                  int
-	protocol              string
-	insecureSkipTLSVerify bool
+type registryServer struct {
+	addr     string // proxy server address
+	port     int    // proxy server port
+	protocol string // http or https
 
 	cert string
 	key  string
 
-	remoteProxyMap     map[string]*httputil.ReverseProxy // map[prefix]Proxy
-	plaintextProxyMap  map[string]config.PlainText       // map[prefix]PlainText
-	staticFileProxyMap map[string]string                 // map[prefix]FilePath
+	remoteURL             string
+	insecureSkipTLSVerify bool
+	hookLocation          bool
+
+	// Manifest index proxy map, the manifest index should not be cached by CDN
+	manifestProxyMap map[string]*httputil.ReverseProxy // map[repository]Proxy
+	// Blobs proxy map, the blobs can be cached by CDN in a long period if the image is public
+	blobsProxyMap map[string]*httputil.ReverseProxy // map[repository]Proxy
+	// API proxy, proxy other registry v2 API requests, should not be cached by CDN
+	apiProxy *httputil.ReverseProxy
+
+	// Custom plaintext proxy map, can be cached by CDN in a short period
+	plaintextProxyMap map[string]config.PlainText // map[prefix]PlainText
+	// Custom static file proxy map, can be cached by CDN in a short period
+	staticFileProxyMap map[string]string // map[prefix]FilePath
 
 	server *http.Server
 	mux    *http.ServeMux
 	errCh  chan error
 }
 
-type Options struct {
-	Addr                  string
-	Port                  int
-	InsecureSkipTLSVerify bool
-	Cert                  string
-	Key                   string
-}
-
-func NewProxyServer(o *Options) *proxyServer {
-	return &proxyServer{
-		addr:                  o.Addr,
-		port:                  o.Port,
-		insecureSkipTLSVerify: o.InsecureSkipTLSVerify,
-		cert:                  o.Cert,
-		key:                   o.Key,
+func NewRegistryServer(
+	ctx context.Context, c *config.Config,
+) (*registryServer, error) {
+	s := &registryServer{
+		addr:                  c.BindAddr,
+		port:                  c.Port,
+		remoteURL:             c.RemoteURL,
+		hookLocation:          c.HookLocation,
+		insecureSkipTLSVerify: c.InsecureSkipTLSVerify,
 		errCh:                 make(chan error),
-		remoteProxyMap:        make(map[string]*httputil.ReverseProxy),
+		manifestProxyMap:      make(map[string]*httputil.ReverseProxy),
+		blobsProxyMap:         make(map[string]*httputil.ReverseProxy),
+		apiProxy:              nil,
 		plaintextProxyMap:     make(map[string]config.PlainText),
 		staticFileProxyMap:    make(map[string]string),
 	}
+	if err := s.registerAPIFactory(ctx); err != nil {
+		return nil, fmt.Errorf("failed to register API factory: %w", err)
+	}
+	for _, r := range c.Repositories {
+		if err := s.registerRepository(ctx, &r); err != nil {
+			return nil, fmt.Errorf("failed to register repository %s: %w", r.Name, err)
+		}
+	}
+
+	for _, r := range c.CustomRoutes {
+		if r.Prefix == "" {
+			logrus.Warnf("ignore route %q: prefix not set", r.Name)
+			continue
+		}
+
+		if r.PlainText != nil {
+			s.registerPlainText(r.Prefix, r.PlainText)
+			continue
+		}
+		if r.StaticFile != "" {
+			s.registerStaticFile(r.Prefix, r.StaticFile)
+			continue
+		}
+	}
+
+	return s, nil
 }
 
-func (p *proxyServer) RegisterRemote(f *factory) {
-	p.remoteProxyMap[f.prefix] = f.Proxy()
-}
-
-func (p *proxyServer) RegisterPlainText(prefix string, c *config.PlainText) {
+func (p *registryServer) registerPlainText(prefix string, c *config.PlainText) {
 	p.plaintextProxyMap[prefix] = *c
 }
 
-func (p *proxyServer) RegisterStaticFile(prefix string, f string) {
+func (p *registryServer) registerStaticFile(prefix string, f string) {
 	p.staticFileProxyMap[prefix] = f
 }
 
-func (p *proxyServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *registryServer) registerRepository(
+	ctx context.Context, r *config.Repository,
+) error {
+	// https://127.0.0.1:5000/v2/library/NAME/manifests/latest
+	manifestRawURLPrefix, err := url.JoinPath(s.remoteURL, "v2", r.Name)
+	if err != nil {
+		return fmt.Errorf("failed to join manifest URL for repository %s: %w", r.Name, err)
+	}
+
+	// https://127.0.0.1:5000/v2/library/NAME/blobs/sha256:aabbccdd....
+	blobsRawURLPrefix, err := url.JoinPath(s.remoteURL, "v2", r.Name, "blobs")
+	if err != nil {
+		return fmt.Errorf("failed to join blobs URL for repository %s: %w", r.Name, err)
+	}
+
+	manifestFactory, err := NewManifestFactory(
+		ctx, manifestRawURLPrefix, s.insecureSkipTLSVerify)
+	if err != nil {
+		return fmt.Errorf("failed to create manifest factory for repository %s: %w", r.Name, err)
+	}
+	s.manifestProxyMap[r.Name] = manifestFactory.Proxy()
+
+	blobsFactory, err := NewBlobsFactory(
+		ctx, blobsRawURLPrefix, s.insecureSkipTLSVerify)
+	if err != nil {
+		return fmt.Errorf("failed to create blobs factory for repository %s: %w", r.Name, err)
+	}
+	s.blobsProxyMap[r.Name] = blobsFactory.Proxy()
+	logrus.Debugf("Registered repository [%s] with manifest URL [%s]",
+		r.Name, manifestRawURLPrefix)
+	logrus.Debugf("Registered repository [%s] with blobs URL [%s]",
+		r.Name, manifestRawURLPrefix)
+
+	return nil
+}
+
+func (s *registryServer) registerAPIFactory(ctx context.Context) error {
+	// https://127.0.0.1:5000/v2/library/NAME/blobs/sha256:aabbccdd....
+	apiURLPrefix, err := url.JoinPath(s.remoteURL, "v2")
+	if err != nil {
+		return fmt.Errorf("failed to join API URL: %w", err)
+	}
+	apiFactory, err := NewAPIFactory(
+		ctx, apiURLPrefix, s.insecureSkipTLSVerify)
+	if err != nil {
+		return fmt.Errorf("failed to create api factory: %w", err)
+	}
+	s.apiProxy = apiFactory.Proxy()
+	return nil
+}
+
+func (p *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	logrus.Debugf("Proxy path [%v]", path)
+	switch utils.DetectURLType(path) {
+	case "manifest":
+		for repo, fn := range p.manifestProxyMap {
+			if !strings.HasPrefix(path, fmt.Sprintf("/v2/%s/", repo)) {
+				continue
+			}
+			fn.ServeHTTP(w, r)
+			return
+		}
+	case "blobs":
+		for repo, fn := range p.blobsProxyMap {
+			if !strings.HasPrefix(path, fmt.Sprintf("/v2/%s/", repo)) {
+				continue
+			}
+			fn.ServeHTTP(w, r)
+			return
+		}
+	default:
+		if strings.HasPrefix(path, "/v2/") {
+			p.apiProxy.ServeHTTP(w, r)
+			return
+		}
 
-	for prefix, fn := range p.remoteProxyMap {
-		if !strings.HasPrefix(path, prefix) {
-			continue
+		for prefix, plainText := range p.plaintextProxyMap {
+			if !strings.HasPrefix(path, prefix) {
+				continue
+			}
+			if plainText.Status != 0 {
+				w.WriteHeader(plainText.Status)
+			}
+			w.Write([]byte(plainText.Content))
+			logrus.Debugf("response plaintext prefix [%v] status [%v] content [%v]",
+				prefix, plainText.Status, strings.TrimSpace(plainText.Content))
+			return
 		}
-		fn.ServeHTTP(w, r)
-		return
-	}
 
-	for prefix, plainText := range p.plaintextProxyMap {
-		if !strings.HasPrefix(path, prefix) {
-			continue
+		for prefix, fileName := range p.staticFileProxyMap {
+			if !strings.HasPrefix(path, prefix) {
+				continue
+			}
+			b, err := os.ReadFile(fileName)
+			if err != nil {
+				logrus.Warnf("failed to read file %q: %v", fileName, err)
+			}
+			w.Write(b)
+			logrus.Debugf("response file [%v] prefix [%v]",
+				fileName, prefix)
+			return
 		}
-		if plainText.Status != 0 {
-			w.WriteHeader(plainText.Status)
-		}
-		w.Write([]byte(plainText.Content))
-		logrus.Debugf("response plaintext prefix [%v] status [%v] content [%v]",
-			prefix, plainText.Status, strings.TrimSpace(plainText.Content))
-		return
-	}
-
-	for prefix, fileName := range p.staticFileProxyMap {
-		if !strings.HasPrefix(path, prefix) {
-			continue
-		}
-		b, err := os.ReadFile(fileName)
-		if err != nil {
-			logrus.Warnf("failed to read file %q: %v", fileName, err)
-		}
-		w.Write(b)
-		logrus.Debugf("response file [%v] prefix [%v]",
-			fileName, prefix)
-		return
 	}
 
 	w.WriteHeader(http.StatusNotFound)
 	w.Write([]byte("404 NOT FOUND"))
-	logrus.Debugf("default status [404] content [NOT FOUND]")
+	logrus.Debugf("default status [404] url [%v] content [NOT FOUND]", r.URL.Path)
 }
 
-func (p *proxyServer) initServer() error {
+func (p *registryServer) initServer() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", p.ServeHTTP)
 	addr := fmt.Sprintf("%v:%v", p.addr, p.port)
@@ -122,7 +220,7 @@ func (p *proxyServer) initServer() error {
 		},
 	}
 	if err := http2.ConfigureServer(server, &http2.Server{}); err != nil {
-		return fmt.Errorf("failed to configure http2.0 server: %v", err)
+		return fmt.Errorf("failed to configure http2 server: %v", err)
 	}
 	p.server = server
 	p.mux = mux
@@ -130,7 +228,7 @@ func (p *proxyServer) initServer() error {
 	return nil
 }
 
-func (p *proxyServer) waitServerShutDown(ctx context.Context) error {
+func (p *registryServer) waitServerShutDown(ctx context.Context) error {
 	select {
 	case err := <-p.errCh:
 		return err
@@ -143,7 +241,7 @@ func (p *proxyServer) waitServerShutDown(ctx context.Context) error {
 	return nil
 }
 
-func (p *proxyServer) Listen(ctx context.Context) error {
+func (p *registryServer) Listen(ctx context.Context) error {
 	p.protocol = "http"
 	if err := p.initServer(); err != nil {
 		return err
@@ -156,7 +254,7 @@ func (p *proxyServer) Listen(ctx context.Context) error {
 	return p.waitServerShutDown(ctx)
 }
 
-func (p *proxyServer) ListenTLS(ctx context.Context) error {
+func (p *registryServer) ListenTLS(ctx context.Context) error {
 	p.protocol = "https"
 	if err := p.initServer(); err != nil {
 		return err

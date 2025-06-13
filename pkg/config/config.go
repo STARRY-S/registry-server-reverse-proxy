@@ -17,11 +17,38 @@ type Config struct {
 	Cert string `json:"cert" yaml:"cert"`
 	Key  string `json:"key" yaml:"key"`
 
+	// RemoteURL is the remote URL of the registry server to be proxied
+	RemoteURL string `json:"remoteURL" yaml:"remoteURL"`
+
+	// HookLocation, if true, will hook the location header to the registry server URL
+	HookLocation bool `json:"hookLocation" yaml:"hookLocation"`
+
 	// InsecureSkipTLSVerify, if true, will skip TLS verification for the proxied requests
 	InsecureSkipTLSVerify bool `json:"insecureSkipTLSVerify" yaml:"insecureSkipTLSVerify"`
 
-	// Route is the
-	Route []Route `json:"route" yaml:"route"`
+	Credential Credential `json:"credential" yaml:"credential"`
+
+	Repositories []Repository `json:"repositories" yaml:"repositories"`
+
+	// CustomRoutes is the list of other custom routes to be proxied
+	CustomRoutes []Route `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
+}
+
+type Repository struct {
+	// Name is the name of the repository
+	Name    string `json:"name" yaml:"name"`
+	Private bool   `json:"private" yaml:"private"`
+}
+
+type Credential struct {
+	// Env Key, if set, will read credential from environment variables
+	UsernameEnvKey string `json:"usernameEnvKey,omitempty" yaml:"usernameEnvKey,omitempty"`
+	PasswordEnvKey string `json:"passwordEnvKey,omitempty" yaml:"passwordEnvKey,omitempty"`
+
+	// Username is the username for the registry server
+	Username string `json:"username,omitempty" yaml:"username,omitempty"`
+	// Password is the password for the registry server
+	Password string `json:"password,omitempty" yaml:"password,omitempty"`
 }
 
 type Route struct {
@@ -31,21 +58,11 @@ type Route struct {
 	// Prefix matches the URL prefix to be proxied
 	Prefix string `json:"prefix" yaml:"prefix"`
 
-	// Remote routes the remote route
-	Remote *Remote `json:"remote,omitempty" yaml:"remote,omitempty"`
-
 	// PlainText responses the txt data if Remote not set
 	PlainText *PlainText `json:"plainText,omitempty" yaml:"plainText,omitempty"`
 
 	// Static file responses the file content if Remote and PlainText not set
 	StaticFile string `json:"staticFile,omitempty" yaml:"staticFile,omitempty"`
-}
-
-type Remote struct {
-	// URL is the destination URL to be proxied
-	URL string `json:"url,omitempty" yaml:"url,omitempty"`
-
-	HookLocation bool `json:"hookLocation,omitempty" yaml:"hookLocation,omitempty"`
 }
 
 type PlainText struct {

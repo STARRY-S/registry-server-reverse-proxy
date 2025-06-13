@@ -26,3 +26,13 @@ func Test_MatchFilters(t *testing.T) {
 		assert.Equal(t, c.result, MatchFilters(c.s, c.filters))
 	}
 }
+
+func Test_DetectURLType(t *testing.T) {
+	assert.Equal(t, "manifest", DetectURLType("/v2/library/nginx/manifests/latest"))
+	assert.Equal(t, "manifest", DetectURLType("/v2/library/alpine/manifests/latest"))
+	assert.Equal(t, "blobs", DetectURLType("/v2/library/nginx/blobs/sha256:abcabc"))
+	assert.Equal(t, "manifest", DetectURLType("https://registry.abc.com/v2/library/nginx/manifests/latest"))
+	assert.Equal(t, "blobs", DetectURLType("https://registry.abc.com/v2/library/nginx/blobs/sha256:abcabc"))
+	assert.Equal(t, "", DetectURLType("https://registry.abc.com/v1"))
+	assert.Equal(t, "", DetectURLType("https://registry.abc.com/v2/token"))
+}

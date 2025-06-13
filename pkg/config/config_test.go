@@ -14,27 +14,40 @@ func Test_Config(t *testing.T) {
 		Cert:     "",
 		Key:      "",
 
+		RemoteURL:             "http://registry.example.com",
+		HookLocation:          true,
 		InsecureSkipTLSVerify: false,
-		Route: []Route{
+		Credential: Credential{
+			UsernameEnvKey: "REGISTRY_USERNAME",
+			PasswordEnvKey: "REGISTRY_PASSWORD",
+		},
+		// Example repositories
+		Repositories: []Repository{
 			{
-				Name:   "registry-server",
-				Prefix: "/v2",
-				Remote: &Remote{
-					URL:          "http://registry.example.com",
-					HookLocation: true,
-				},
+				Name:    "library",
+				Private: false,
 			},
 			{
-				Prefix: "/",
+				Name:    "test1",
+				Private: true,
+			},
+			{
+				Name:    "test2",
+				Private: true,
+			},
+		},
+		CustomRoutes: []Route{
+			{
+				Prefix: "/text",
 				PlainText: &PlainText{
-					Content: "This is a plain text response",
+					Content: "This is a plain text response\n",
 					Status:  200,
 				},
 			},
 			{
 				Prefix: "/favicon.ico",
 				PlainText: &PlainText{
-					Content: "404 not found",
+					Content: "404 not found\n",
 					Status:  404,
 				},
 			},
@@ -45,7 +58,7 @@ func Test_Config(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal config: %v", err)
 	}
-	f, err := os.Create("tmp.yaml")
+	f, err := os.Create("config.yaml")
 	if err != nil {
 		t.Fatalf("failed to create tmp.yaml: %v", err)
 	}
