@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 
 	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/utils"
 	"github.com/sirupsen/logrus"
@@ -78,7 +79,21 @@ func NewBlobsFactory(
 		if location == "" {
 			return nil
 		}
-		res, err := utils.HttpGet(ctx, location, insecure)
+		// TODO: Need better logic
+		if r.Request.Method != "GET" && r.Request.Method != "HEAD" {
+			// For non GET/HEAD method, update the location URL directly
+			logrus.Debugf("replace manifest response header [%v] the [%v] with [%v]",
+				location, "https://harbor.hxstarrys.me", "http://127.0.0.1:8080")
+			location = strings.ReplaceAll(location, "https://harbor.hxstarrys.me", "http://127.0.0.1:8080") // TODO:
+			r.Header.Set("Location", location)
+			return nil
+		}
+		req, err := http.NewRequestWithContext(ctx, r.Request.Method, location, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create new request %q: %w", location, err)
+		}
+
+		res, err := utils.HttpGet(ctx, req, insecure)
 		if err != nil {
 			logrus.Errorf("%v", err)
 			return err

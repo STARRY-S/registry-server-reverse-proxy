@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -139,12 +138,7 @@ func MatchFilters(s string, filters []string) bool {
 	return false
 }
 
-func HttpGet(ctx context.Context, u string, insecure bool) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
+func HttpGet(ctx context.Context, req *http.Request, insecure bool) (*http.Response, error) {
 	client := &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
@@ -156,7 +150,7 @@ func HttpGet(ctx context.Context, u string, insecure bool) (*http.Response, erro
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get http request on %q: %w", u, err)
+		return nil, fmt.Errorf("failed to get http request on %q: %w", req.URL.String(), err)
 	}
 	return res, nil
 }

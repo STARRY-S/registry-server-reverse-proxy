@@ -8,6 +8,9 @@ import (
 )
 
 type Config struct {
+	// ServerURL is the URL of this registry server, used for redirecting
+	// and location header
+	ServerURL string `json:"serverURL" yaml:"serverURL"`
 	// BindAddr is the address to bind, default 127.0.0.1
 	BindAddr string `json:"bindAddr" yaml:"bindAddr"`
 	// Port is the port of the proxy server

@@ -38,3 +38,7 @@ tmp.yaml
 config.yaml
 /*.txt
 /*.zip
+*.log
+
+.vscode/
+!.vscode/launch.json.template

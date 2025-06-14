@@ -18,9 +18,10 @@ import (
 )
 
 type registryServer struct {
-	addr     string // proxy server address
-	port     int    // proxy server port
-	protocol string // http or https
+	serverURL *url.URL
+	addr      string // proxy server address
+	port      int    // proxy server port
+	protocol  string // http or https
 
 	cert string
 	key  string
@@ -50,6 +51,7 @@ func NewRegistryServer(
 	ctx context.Context, c *config.Config,
 ) (*registryServer, error) {
 	s := &registryServer{
+		serverURL:             nil,
 		addr:                  c.BindAddr,
 		port:                  c.Port,
 		remoteURL:             c.RemoteURL,
@@ -62,6 +64,11 @@ func NewRegistryServer(
 		plaintextProxyMap:     make(map[string]config.PlainText),
 		staticFileProxyMap:    make(map[string]string),
 	}
+	u, err := url.Parse(c.ServerURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse server URL %s: %w", c.ServerURL, err)
+	}
+	s.serverURL = u
 	if err := s.registerAPIFactory(ctx); err != nil {
 		return nil, fmt.Errorf("failed to register API factory: %w", err)
 	}
@@ -136,7 +143,7 @@ func (s *registryServer) registerRepository(
 
 func (s *registryServer) registerAPIFactory(ctx context.Context) error {
 	apiFactory, err := NewAPIFactory(
-		ctx, s.remoteURL, fmt.Sprintf("%v:%v", s.addr, s.port), s.insecureSkipTLSVerify)
+		ctx, s.remoteURL, s.serverURL, s.insecureSkipTLSVerify)
 	if err != nil {
 		return fmt.Errorf("failed to create api factory: %w", err)
 	}

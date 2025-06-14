@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 
 	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/utils"
 	"github.com/sirupsen/logrus"
@@ -25,6 +26,9 @@ func (f *manifestFactory) defaultDirector(r *http.Request) {
 	r.Host = f.remoteURL.Host
 	r.URL.Scheme = f.remoteURL.Scheme
 	r.URL.Host = f.remoteURL.Host
+	if r.Method == "PUT" {
+		logrus.Infof("XXXX PUT")
+	}
 
 	// Dump request debug data
 	if logrus.GetLevel() >= logrus.DebugLevel {
@@ -39,6 +43,18 @@ func (f *manifestFactory) defaultDirector(r *http.Request) {
 }
 
 func (f *manifestFactory) defaultModifyResponse(r *http.Response) error {
+	// Re-write the Location/Auth header if exists
+	// https://registry.example.com/service/token
+	auth := r.Header.Get("Www-Authenticate")
+	if auth != "" {
+		if strings.HasPrefix(auth, "Bearer realm=") {
+			logrus.Debugf("replace manifest response header [%v] the [%v] with [%v]",
+				auth, "https://harbor.hxstarrys.me", "http://127.0.0.1:8080")
+			auth = strings.ReplaceAll(auth, "https://harbor.hxstarrys.me", "http://127.0.0.1:8080") // TODO:
+			r.Header.Set("Www-Authenticate", auth)
+		}
+	}
+
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		// Dump response debug data
 		b, err := httputil.DumpResponse(r, false)
@@ -75,11 +91,26 @@ func NewManifestFactory(
 	f.modifyResponse = func(r *http.Response) error {
 		defer f.defaultModifyResponse(r)
 
+		// TODO: Need better logic
 		location := r.Header.Get("Location")
 		if location == "" {
 			return nil
 		}
-		res, err := utils.HttpGet(ctx, location, insecure)
+		if r.Request.Method != "GET" && r.Request.Method != "HEAD" {
+			// For non GET/HEAD method, update the location URL directly
+			logrus.Debugf("replace manifest response header [%v] the [%v] with [%v]",
+				location, "https://harbor.hxstarrys.me", "http://127.0.0.1:8080")
+			location = strings.ReplaceAll(location, "https://harbor.hxstarrys.me", "http://127.0.0.1:8080") // TODO:
+			r.Header.Set("Location", location)
+			return nil
+		}
+		req, err := http.NewRequestWithContext(ctx, r.Request.Method, location, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create new request %q: %w", location, err)
+		}
+
+		req.Header = r.Request.Header
+		res, err := utils.HttpGet(ctx, req, insecure)
 		if err != nil {
 			logrus.Errorf("%v", err)
 			return err

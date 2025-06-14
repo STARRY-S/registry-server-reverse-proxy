@@ -13,7 +13,7 @@ import (
 
 type apiFactory struct {
 	remoteURL             *url.URL
-	localRawURL           string
+	localURL              *url.URL
 	insecureSkipTLSVerify bool
 
 	director       func(r *http.Request)
@@ -39,9 +39,21 @@ func (f *apiFactory) defaultDirector(r *http.Request) {
 }
 
 func (f *apiFactory) defaultModifyResponse(r *http.Response) error {
+	// Re-write the Location/Auth header if exists
+	// https://registry.example.com/service/token
+	auth := r.Header.Get("Www-Authenticate")
+	if auth != "" {
+		if strings.HasPrefix(auth, "Bearer realm=") {
+			logrus.Debugf("replace response header [%v] the [%v] with [%v]",
+				auth, f.remoteURL.String(), f.localURL.String())
+			auth = strings.ReplaceAll(auth, f.remoteURL.String(), f.localURL.String())
+			r.Header.Set("Www-Authenticate", auth)
+		}
+	}
+
 	if logrus.GetLevel() >= logrus.DebugLevel {
 		// Dump response debug data
-		b, err := httputil.DumpResponse(r, true)
+		b, err := httputil.DumpResponse(r, false)
 		if err != nil {
 			logrus.Debugf("failed to dump response: %v", err)
 		} else {
@@ -60,36 +72,20 @@ func (f *apiFactory) defaultErrorHandler(w http.ResponseWriter, r *http.Request,
 
 // Factory is the generator factory for SingleReverseProxy Server
 func NewAPIFactory(
-	ctx context.Context, remoteURL, localURL string, insecure bool,
+	ctx context.Context, remoteRawURL string, serverURL *url.URL, insecure bool,
 ) (*apiFactory, error) {
-	u, err := url.Parse(remoteURL)
+	u, err := url.Parse(remoteRawURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse target URL: %w", err)
 	}
 	f := &apiFactory{
 		remoteURL:             u,
-		localRawURL:           localURL,
+		localURL:              serverURL,
 		insecureSkipTLSVerify: insecure,
 	}
 	f.errorHandler = f.defaultErrorHandler
 	// Register new modifyResponse function for hook location
-	f.modifyResponse = func(r *http.Response) error {
-		defer f.defaultModifyResponse(r)
-
-		// https://registry.example.com/service/token
-		auth := r.Header.Get("Www-Authenticate")
-		if auth != "" {
-			if strings.HasPrefix(auth, "Bearer realm=") {
-				// TODO:
-				logrus.Debugf("replace response header [%v] the [%v] with [%v]",
-					auth, u.Hostname(), f.localRawURL)
-				auth = strings.ReplaceAll(auth, u.Hostname(), f.localRawURL)
-				r.Header.Set("Www-Authenticate", auth)
-			}
-		}
-
-		return nil
-	}
+	f.modifyResponse = f.defaultModifyResponse
 	f.director = f.defaultDirector
 	return f, nil
 }
