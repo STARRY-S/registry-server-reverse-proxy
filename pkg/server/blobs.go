@@ -93,7 +93,7 @@ func NewBlobsFactory(
 			return fmt.Errorf("failed to create new request %q: %w", location, err)
 		}
 
-		res, err := utils.HttpGet(ctx, req, insecure)
+		res, err := utils.HTTPGet(ctx, req, insecure)
 		if err != nil {
 			logrus.Errorf("%v", err)
 			return err

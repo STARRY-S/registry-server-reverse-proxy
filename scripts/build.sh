@@ -4,12 +4,11 @@
 
 cd $(dirname $0)/../
 
-set -euo pipefail
+set -exuo pipefail
 
-go build -o proxy ./pkg/cmd
+mkdir -p build && cd build
 
-echo '----------------------'
-ls -alh ./proxy
-echo '----------------------'
+CGO_ENABLED=0 \
+    go build -a -ldflags '-extldflags "-static"' -o proxy ../pkg/cmd
 
-echo "Build: Done"
+echo "build: Done"

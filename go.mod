@@ -1,6 +1,6 @@
 module github.com/STARRY-S/registry-server-reverse-proxy
 
-go 1.24.4
+go 1.24
 
 require (
 	github.com/STARRY-S/simple-logrus-formatter v0.0.0-20250427025245-bdb535b56165

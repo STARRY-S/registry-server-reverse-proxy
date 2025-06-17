@@ -110,7 +110,7 @@ func NewManifestFactory(
 		}
 
 		req.Header = r.Request.Header
-		res, err := utils.HttpGet(ctx, req, insecure)
+		res, err := utils.HTTPGet(ctx, req, insecure)
 		if err != nil {
 			logrus.Errorf("%v", err)
 			return err

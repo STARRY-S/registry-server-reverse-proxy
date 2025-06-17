@@ -97,12 +97,12 @@ func NewRegistryServer(
 	return s, nil
 }
 
-func (p *registryServer) registerPlainText(prefix string, c *config.PlainText) {
-	p.plaintextProxyMap[prefix] = *c
+func (s *registryServer) registerPlainText(prefix string, c *config.PlainText) {
+	s.plaintextProxyMap[prefix] = *c
 }
 
-func (p *registryServer) registerStaticFile(prefix string, f string) {
-	p.staticFileProxyMap[prefix] = f
+func (s *registryServer) registerStaticFile(prefix string, f string) {
+	s.staticFileProxyMap[prefix] = f
 }
 
 func (s *registryServer) registerRepository(
@@ -151,12 +151,12 @@ func (s *registryServer) registerAPIFactory(ctx context.Context) error {
 	return nil
 }
 
-func (p *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	logrus.Debugf("Proxy path [%v]", path)
 	switch utils.DetectURLType(path) {
 	case "manifest":
-		for repo, fn := range p.manifestProxyMap {
+		for repo, fn := range s.manifestProxyMap {
 			if !strings.HasPrefix(path, fmt.Sprintf("/v2/%s/", repo)) {
 				continue
 			}
@@ -164,7 +164,7 @@ func (p *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "blobs":
-		for repo, fn := range p.blobsProxyMap {
+		for repo, fn := range s.blobsProxyMap {
 			if !strings.HasPrefix(path, fmt.Sprintf("/v2/%s/", repo)) {
 				continue
 			}
@@ -172,7 +172,7 @@ func (p *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		for prefix, plainText := range p.plaintextProxyMap {
+		for prefix, plainText := range s.plaintextProxyMap {
 			if !strings.HasPrefix(path, prefix) {
 				continue
 			}
@@ -185,7 +185,7 @@ func (p *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		for prefix, fileName := range p.staticFileProxyMap {
+		for prefix, fileName := range s.staticFileProxyMap {
 			if !strings.HasPrefix(path, prefix) {
 				continue
 			}
@@ -199,65 +199,66 @@ func (p *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	p.apiProxy.ServeHTTP(w, r)
+	s.apiProxy.ServeHTTP(w, r)
 }
 
-func (p *registryServer) initServer() error {
+func (s *registryServer) initServer() error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", p.ServeHTTP)
-	addr := fmt.Sprintf("%v:%v", p.addr, p.port)
+	mux.HandleFunc("/", s.ServeHTTP)
+	addr := fmt.Sprintf("%v:%v", s.addr, s.port)
 	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: time.Second * 10,
 		TLSConfig: &tls.Config{
-			InsecureSkipVerify: p.insecureSkipTLSVerify,
+			InsecureSkipVerify: s.insecureSkipTLSVerify,
 		},
 	}
 	if err := http2.ConfigureServer(server, &http2.Server{}); err != nil {
 		return fmt.Errorf("failed to configure http2 server: %v", err)
 	}
-	p.server = server
-	p.mux = mux
-	logrus.Infof("server listen on %v://%v", p.protocol, addr)
+	s.server = server
+	s.mux = mux
+	logrus.Infof("server listen on %v://%v", s.protocol, addr)
 	return nil
 }
 
-func (p *registryServer) waitServerShutDown(ctx context.Context) error {
+func (s *registryServer) waitServerShutDown(ctx context.Context) error {
 	select {
-	case err := <-p.errCh:
+	case err := <-s.errCh:
 		return err
 	case <-ctx.Done():
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-		p.server.Shutdown(timeoutCtx)
+		s.server.Shutdown(timeoutCtx)
 		cancel()
 		logrus.Warnf("%v", ctx.Err())
 	}
 	return nil
 }
 
-func (p *registryServer) Listen(ctx context.Context) error {
-	p.protocol = "http"
-	if err := p.initServer(); err != nil {
+func (s *registryServer) Listen(ctx context.Context) error {
+	s.protocol = "http"
+	if err := s.initServer(); err != nil {
 		return err
 	}
 	go func() {
-		if err := p.server.ListenAndServe(); err != nil {
-			p.errCh <- fmt.Errorf("failed to start server: %w", err)
+		if err := s.server.ListenAndServe(); err != nil {
+			s.errCh <- fmt.Errorf("failed to start server: %w", err)
 		}
 	}()
-	return p.waitServerShutDown(ctx)
+	return s.waitServerShutDown(ctx)
 }
 
-func (p *registryServer) ListenTLS(ctx context.Context) error {
-	p.protocol = "https"
-	if err := p.initServer(); err != nil {
+func (s *registryServer) ListenTLS(ctx context.Context) error {
+	s.protocol = "https"
+	if err := s.initServer(); err != nil {
 		return err
 	}
 	go func() {
-		if err := p.server.ListenAndServeTLS(p.cert, p.key); err != nil {
+		if err := s.server.ListenAndServeTLS(s.cert, s.key); err != nil {
 			logrus.Warnf("error: %v", err)
-			p.errCh <- fmt.Errorf("failed to start http2 server: %w", err)
+			s.errCh <- fmt.Errorf("failed to start http2 server: %w", err)
 		}
 	}()
-	return p.waitServerShutDown(ctx)
+	return s.waitServerShutDown(ctx)
 }

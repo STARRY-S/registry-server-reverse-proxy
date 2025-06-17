@@ -138,7 +138,7 @@ func MatchFilters(s string, filters []string) bool {
 	return false
 }
 
-func HttpGet(ctx context.Context, req *http.Request, insecure bool) (*http.Response, error) {
+func HTTPGet(ctx context.Context, req *http.Request, insecure bool) (*http.Response, error) {
 	client := &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,

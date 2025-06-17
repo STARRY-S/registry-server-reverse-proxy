@@ -39,6 +39,7 @@ config.yaml
 /*.txt
 /*.zip
 *.log
+/build
 
 .vscode/
 !.vscode/launch.json.template
