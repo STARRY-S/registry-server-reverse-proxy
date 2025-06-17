@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: "ghcr.io"
+  REPOSITORY: "library"
+  HANGAR_VERSION: "v1.9.2"
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  github-release:
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: GitHub Release
+        uses: ./.github/actions/github-release
+  image-build-amd64:
+    runs-on: 'ubuntu-24.04'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build Image
+        uses: ./.github/actions/image-build
+  image-build-arm64:
+    runs-on: 'ubuntu-24.04-arm'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build Image
+        uses: ./.github/actions/image-build
+  image-manifest:
+    needs: [ image-build-amd64, image-build-arm64 ]
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Image Manifest
+        uses: ./.github/actions/image-manifest

@@ -1,0 +1,39 @@
+name: "Image Manifest"
+description: "Merge image manifest"
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare env
+      shell: bash
+      run: |-
+        REPOSITORY=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
+        echo "REPOSITORY=$REPOSITORY" >> $GITHUB_ENV
+    - name: Login to ghcr.io
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ env.REPOSITORY }}
+        password: ${{ env.GH_TOKEN }}
+    - name: Install Hangar
+      uses: cnrancher/hangar/.github/actions/install-hangar@main
+      with:
+        version: ${{ env.HANGAR_VERSION }}
+    - name: Create manifest list and push
+      shell: bash
+      run: |
+        set -x
+
+        hangar merge-manifest ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }} \
+          ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }}-amd64 \
+          ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }}-arm64
+
+        hangar inspect docker://${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }} --raw
+
+        # Create latest tag on final release
+        if [[ "${{ github.ref_name }}" != *rc* ]] && [[ "${{ github.ref_name }}" != *beta* ]] && [[ "${{ github.ref_name }}" != *alpha* ]]; then
+          hangar merge-manifest ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:latest \
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }}-amd64 \
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }}-arm64
+
+          hangar inspect docker://${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:latest --raw
+        fi
