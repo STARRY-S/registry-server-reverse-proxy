@@ -49,31 +49,24 @@ func newRunCmd() *runCmd {
 }
 
 func (cc *runCmd) init() error {
+	var err error
 	if cc.ConfigFile == "" {
 		return fmt.Errorf("config file not provided")
 	}
-	c, err := config.NewConfigFromFile(cc.ConfigFile)
+	cc.config, err = config.NewConfigFromFile(cc.ConfigFile)
 	if err != nil {
 		return err
 	}
-	cc.config = c
 
-	s, err := server.NewRegistryServer(signalContext, cc.config)
+	cc.server, err = server.NewRegistryServer(signalContext, cc.config)
 	if err != nil {
 		return fmt.Errorf("failed to create proxy server: %w", err)
 	}
-	cc.server = s
 	return nil
 }
 
 func (cc *runCmd) run() error {
-	var err error
-	if cc.config.Cert != "" {
-		err = cc.server.ListenTLS(signalContext)
-	} else {
-		err = cc.server.Listen(signalContext)
-	}
-	return err
+	return cc.server.Serve(signalContext)
 }
 
 func (cc *runCmd) getCommand() *cobra.Command {

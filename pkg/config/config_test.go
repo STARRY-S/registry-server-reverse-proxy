@@ -9,14 +9,13 @@ import (
 
 func Test_Config(t *testing.T) {
 	c := &Config{
-		ServerURL: "http://registry.proxy.com:8080",
+		ServerURL: "http://registry.abc.local:8080",
 		BindAddr:  "127.0.0.1",
 		Port:      8080,
 		Cert:      "",
 		Key:       "",
 
 		RemoteURL:             "http://registry.example.com",
-		HookLocation:          true,
 		InsecureSkipTLSVerify: false,
 		Credential: Credential{
 			UsernameEnvKey: "REGISTRY_USERNAME",

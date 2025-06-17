@@ -17,11 +17,18 @@ func newVersionCmd() *versionCmd {
 		Use:  "version",
 		Long: "Show version",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("checker version %s\n", utils.Version)
+			fmt.Printf("checker version %s\n", cc.version())
 		},
 	})
 
 	return cc
+}
+
+func (cc *versionCmd) version() string {
+	if utils.Commit != "" {
+		return fmt.Sprintf("%v - %v", utils.Version, utils.Commit)
+	}
+	return utils.Version
 }
 
 func (cc *versionCmd) getCommand() *cobra.Command {

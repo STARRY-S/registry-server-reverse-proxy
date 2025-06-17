@@ -23,9 +23,6 @@ type Config struct {
 	// RemoteURL is the remote URL of the registry server to be proxied
 	RemoteURL string `json:"remoteURL" yaml:"remoteURL"`
 
-	// HookLocation, if true, will hook the location header to the registry server URL
-	HookLocation bool `json:"hookLocation" yaml:"hookLocation"`
-
 	// InsecureSkipTLSVerify, if true, will skip TLS verification for the proxied requests
 	InsecureSkipTLSVerify bool `json:"insecureSkipTLSVerify" yaml:"insecureSkipTLSVerify"`
 

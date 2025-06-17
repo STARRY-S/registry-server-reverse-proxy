@@ -1,4 +1,4 @@
-serverURL: http://registry.proxy.com:8080
+serverURL: http://127.0.0.1:8080
 bindAddr: 127.0.0.1
 listen: 8080
 cert: ""

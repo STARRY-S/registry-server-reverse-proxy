@@ -10,7 +10,6 @@ permissions:
 
 env:
   REGISTRY: "ghcr.io"
-  REPOSITORY: "library"
   HANGAR_VERSION: "v1.9.2"
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -18,17 +18,15 @@ import (
 )
 
 type registryServer struct {
-	serverURL *url.URL
-	addr      string // proxy server address
-	port      int    // proxy server port
-	protocol  string // http or https
+	serverURL *url.URL // proxy server actual http url (localURL)
+	addr      string   // proxy server bind address
+	port      int      // proxy server bind port
 
 	cert string
 	key  string
 
-	remoteURL             string
+	remoteURL             *url.URL // the proxied remote registry URL
 	insecureSkipTLSVerify bool
-	hookLocation          bool
 
 	// Manifest index proxy map, the manifest index should not be cached by CDN
 	manifestProxyMap map[string]*httputil.ReverseProxy // map[repository]Proxy
@@ -42,20 +40,20 @@ type registryServer struct {
 	// Custom static file proxy map, can be cached by CDN in a short period
 	staticFileProxyMap map[string]string // map[prefix]FilePath
 
-	server *http.Server
-	mux    *http.ServeMux
+	server *http.Server   // HTTP2 server
+	mux    *http.ServeMux // HTTP request multiplexer
 	errCh  chan error
 }
 
 func NewRegistryServer(
 	ctx context.Context, c *config.Config,
 ) (*registryServer, error) {
+	var err error
 	s := &registryServer{
 		serverURL:             nil,
 		addr:                  c.BindAddr,
 		port:                  c.Port,
-		remoteURL:             c.RemoteURL,
-		hookLocation:          c.HookLocation,
+		remoteURL:             nil,
 		insecureSkipTLSVerify: c.InsecureSkipTLSVerify,
 		errCh:                 make(chan error),
 		manifestProxyMap:      make(map[string]*httputil.ReverseProxy),
@@ -64,16 +62,19 @@ func NewRegistryServer(
 		plaintextProxyMap:     make(map[string]config.PlainText),
 		staticFileProxyMap:    make(map[string]string),
 	}
-	u, err := url.Parse(c.ServerURL)
+	s.serverURL, err = url.Parse(c.ServerURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse server URL %s: %w", c.ServerURL, err)
 	}
-	s.serverURL = u
-	if err := s.registerAPIFactory(ctx); err != nil {
+	s.remoteURL, err = url.Parse(c.RemoteURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse remote URL %s: %w", c.RemoteURL, err)
+	}
+	if err := s.registerAPIFactory(); err != nil {
 		return nil, fmt.Errorf("failed to register API factory: %w", err)
 	}
 	for _, r := range c.Repositories {
-		if err := s.registerRepository(ctx, &r); err != nil {
+		if err := s.registerRepository(&r); err != nil {
 			return nil, fmt.Errorf("failed to register repository %s: %w", r.Name, err)
 		}
 	}
@@ -105,49 +106,76 @@ func (s *registryServer) registerStaticFile(prefix string, f string) {
 	s.staticFileProxyMap[prefix] = f
 }
 
-func (s *registryServer) registerRepository(
-	ctx context.Context, r *config.Repository,
-) error {
-	// https://127.0.0.1:5000/v2/library/NAME/manifests/latest
-	manifestRawURLPrefix, err := url.JoinPath(s.remoteURL, "v2", r.Name)
-	if err != nil {
-		return fmt.Errorf("failed to join manifest URL for repository %s: %w", r.Name, err)
+func (s *registryServer) registerManifestFactory(r *config.Repository) error {
+	// https://registry_url/v2/REPO_NAME/manifests/latest
+	manifestPrefixURL := s.remoteURL.JoinPath("v2", r.Name)
+	f := &factory{
+		kind:                  ManifestFactory,
+		localURL:              s.serverURL,
+		remoteURL:             s.remoteURL,
+		prefixURL:             manifestPrefixURL,
+		insecureSkipTLSVerify: s.insecureSkipTLSVerify,
 	}
+	f.errorHandler = f.defaultErrorHandler
+	f.modifyResponse = f.defaultModifyResponse
+	f.director = f.defaultDirector
+	s.manifestProxyMap[r.Name] = f.Proxy()
 
-	// https://127.0.0.1:5000/v2/library/NAME/blobs/sha256:aabbccdd....
-	blobsRawURLPrefix, err := url.JoinPath(s.remoteURL, "v2", r.Name, "blobs")
-	if err != nil {
-		return fmt.Errorf("failed to join blobs URL for repository %s: %w", r.Name, err)
-	}
-
-	manifestFactory, err := NewManifestFactory(
-		ctx, manifestRawURLPrefix, s.insecureSkipTLSVerify)
-	if err != nil {
-		return fmt.Errorf("failed to create manifest factory for repository %s: %w", r.Name, err)
-	}
-	s.manifestProxyMap[r.Name] = manifestFactory.Proxy()
-
-	blobsFactory, err := NewBlobsFactory(
-		ctx, blobsRawURLPrefix, s.insecureSkipTLSVerify)
-	if err != nil {
-		return fmt.Errorf("failed to create blobs factory for repository %s: %w", r.Name, err)
-	}
-	s.blobsProxyMap[r.Name] = blobsFactory.Proxy()
 	logrus.Debugf("Registered repository [%s] with manifest URL [%s]",
-		r.Name, manifestRawURLPrefix)
-	logrus.Debugf("Registered repository [%s] with blobs URL [%s]",
-		r.Name, manifestRawURLPrefix)
+		r.Name, manifestPrefixURL)
 
 	return nil
 }
 
-func (s *registryServer) registerAPIFactory(ctx context.Context) error {
-	apiFactory, err := NewAPIFactory(
-		ctx, s.remoteURL, s.serverURL, s.insecureSkipTLSVerify)
-	if err != nil {
-		return fmt.Errorf("failed to create api factory: %w", err)
+func (s *registryServer) registerBlobsFactory(r *config.Repository) error {
+	// https://registry_url/v2/REPO_NAME/blobs/sha256:aabbccdd....
+	blobsPrefixURL := s.remoteURL.JoinPath("v2", r.Name, "blobs")
+	f := &factory{
+		kind:                  BlobsFactory,
+		localURL:              s.serverURL,
+		remoteURL:             s.remoteURL,
+		prefixURL:             blobsPrefixURL,
+		privateRepo:           r.Private,
+		insecureSkipTLSVerify: s.insecureSkipTLSVerify,
 	}
-	s.apiProxy = apiFactory.Proxy()
+	f.errorHandler = f.defaultErrorHandler
+	f.modifyResponse = f.defaultModifyResponse
+	f.director = f.defaultDirector
+	s.blobsProxyMap[r.Name] = f.Proxy()
+
+	logrus.Debugf("Registered repository [%s] with blobs URL [%s]",
+		r.Name, blobsPrefixURL)
+
+	return nil
+}
+
+func (s *registryServer) registerAPIFactory() error {
+	// https://registry_url/
+	f := &factory{
+		kind:                  APIFactory,
+		localURL:              s.serverURL,
+		remoteURL:             s.remoteURL,
+		prefixURL:             s.remoteURL,
+		privateRepo:           true, // Set to true for other API requests
+		insecureSkipTLSVerify: s.insecureSkipTLSVerify,
+	}
+	f.errorHandler = f.defaultErrorHandler
+	f.modifyResponse = f.defaultModifyResponse
+	f.director = f.defaultDirector
+	s.apiProxy = f.Proxy()
+
+	logrus.Debugf("Registered default API request proxy")
+
+	return nil
+}
+
+func (s *registryServer) registerRepository(r *config.Repository) error {
+	if err := s.registerManifestFactory(r); err != nil {
+		return fmt.Errorf("register manifest factory on repo [%v]: %w", r.Name, err)
+	}
+	if err := s.registerBlobsFactory(r); err != nil {
+		return fmt.Errorf("register blobs factory on repo [%v]: %w", r.Name, err)
+	}
 	return nil
 }
 
@@ -203,23 +231,21 @@ func (s *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *registryServer) initServer() error {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.ServeHTTP)
+	s.mux = http.NewServeMux()
+	s.mux.HandleFunc("/", s.ServeHTTP)
 	addr := fmt.Sprintf("%v:%v", s.addr, s.port)
-	server := &http.Server{
+	s.server = &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           s.mux,
 		ReadHeaderTimeout: time.Second * 10,
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: s.insecureSkipTLSVerify,
 		},
 	}
-	if err := http2.ConfigureServer(server, &http2.Server{}); err != nil {
+	if err := http2.ConfigureServer(s.server, &http2.Server{}); err != nil {
 		return fmt.Errorf("failed to configure http2 server: %v", err)
 	}
-	s.server = server
-	s.mux = mux
-	logrus.Infof("server listen on %v://%v", s.protocol, addr)
+	logrus.Infof("server listen on %v://%v", s.serverURL.Scheme, addr)
 	return nil
 }
 
@@ -236,28 +262,23 @@ func (s *registryServer) waitServerShutDown(ctx context.Context) error {
 	return nil
 }
 
-func (s *registryServer) Listen(ctx context.Context) error {
-	s.protocol = "http"
+func (s *registryServer) Serve(ctx context.Context) error {
 	if err := s.initServer(); err != nil {
 		return err
 	}
 	go func() {
-		if err := s.server.ListenAndServe(); err != nil {
-			s.errCh <- fmt.Errorf("failed to start server: %w", err)
+		var err error
+		switch s.serverURL.Scheme {
+		case "http":
+			err = s.server.ListenAndServe()
+		case "https":
+			err = s.server.ListenAndServeTLS(s.cert, s.key)
+		default:
+			err = fmt.Errorf("unsupported url scheme %q", s.serverURL.Scheme)
 		}
-	}()
-	return s.waitServerShutDown(ctx)
-}
 
-func (s *registryServer) ListenTLS(ctx context.Context) error {
-	s.protocol = "https"
-	if err := s.initServer(); err != nil {
-		return err
-	}
-	go func() {
-		if err := s.server.ListenAndServeTLS(s.cert, s.key); err != nil {
-			logrus.Warnf("error: %v", err)
-			s.errCh <- fmt.Errorf("failed to start http2 server: %w", err)
+		if err != nil {
+			s.errCh <- fmt.Errorf("failed to start server: %w", err)
 		}
 	}()
 	return s.waitServerShutDown(ctx)
