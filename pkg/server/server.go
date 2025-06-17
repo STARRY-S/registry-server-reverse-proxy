@@ -121,8 +121,8 @@ func (s *registryServer) registerManifestFactory(r *config.Repository) error {
 	f.director = f.defaultDirector
 	s.manifestProxyMap[r.Name] = f.Proxy()
 
-	logrus.Debugf("Registered repository [%s] with manifest URL [%s]",
-		r.Name, manifestPrefixURL)
+	logrus.Debugf("Registered repository [%s] with manifest URL [%s] [privateRepo: %v]",
+		r.Name, manifestPrefixURL, r.Private)
 
 	return nil
 }
@@ -143,8 +143,8 @@ func (s *registryServer) registerBlobsFactory(r *config.Repository) error {
 	f.director = f.defaultDirector
 	s.blobsProxyMap[r.Name] = f.Proxy()
 
-	logrus.Debugf("Registered repository [%s] with blobs URL [%s]",
-		r.Name, blobsPrefixURL)
+	logrus.Debugf("Registered repository [%s] with blobs URL [%s] [privateRepo: %v]",
+		r.Name, blobsPrefixURL, r.Private)
 
 	return nil
 }

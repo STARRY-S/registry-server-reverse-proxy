@@ -1,5 +1,7 @@
 # Registry Server Reverse Proxy
 
+[![Push CI](https://github.com/STARRY-S/registry-server-reverse-proxy/actions/workflows/ci.yaml/badge.svg)](https://github.com/STARRY-S/registry-server-reverse-proxy/actions/workflows/ci.yaml)
+
 Reverse proxy for saving registry server CDN traffic costs.
 
 ## License
