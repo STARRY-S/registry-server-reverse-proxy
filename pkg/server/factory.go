@@ -74,6 +74,7 @@ func (f *factory) hookLocationHeader(r *http.Response) error {
 	switch r.Request.Method {
 	case http.MethodGet, http.MethodHead:
 		// Hook the location header for HEAD/GET request
+		logrus.Debugf("hookLocationHeader: %q request location: %v", r.Request.Method, location)
 		req, err := http.NewRequestWithContext(r.Request.Context(), r.Request.Method, location, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create new request %q: %w", location, err)
