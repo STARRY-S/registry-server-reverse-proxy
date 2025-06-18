@@ -23,17 +23,17 @@ runs:
       run: |
         set -x
 
-        hangar merge-manifest ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }} \
-          ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }}-amd64 \
-          ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }}-arm64
+        hangar merge-manifest ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:${{ github.ref_name }} \
+          ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:${{ github.ref_name }}-amd64 \
+          ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:${{ github.ref_name }}-arm64
 
-        hangar inspect docker://${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }} --raw
+        hangar inspect docker://${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:${{ github.ref_name }} --raw
 
         # Create latest tag on final release
         if [[ "${{ github.ref_name }}" != *rc* ]] && [[ "${{ github.ref_name }}" != *beta* ]] && [[ "${{ github.ref_name }}" != *alpha* ]]; then
-          hangar merge-manifest ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:latest \
-            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }}-amd64 \
-            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }}-arm64
+          hangar merge-manifest ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:latest \
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:${{ github.ref_name }}-amd64 \
+            ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:${{ github.ref_name }}-arm64
 
-          hangar inspect docker://${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:latest --raw
+          hangar inspect docker://${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:latest --raw
         fi

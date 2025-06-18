@@ -32,7 +32,7 @@ go.work.sum
 # .vscode/
 
 /proxy
-/registry-server-reverse-proxy
+/overlayer
 tmp*
 tmp.yaml
 config.yaml
@@ -41,5 +41,4 @@ config.yaml
 *.log
 /build
 
-.vscode/
-!.vscode/launch.json.template
+.vscode/*.json

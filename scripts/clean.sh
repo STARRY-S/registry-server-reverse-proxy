@@ -6,4 +6,6 @@ cd $(dirname $0)/../
 set -exuo pipefail
 
 rm -r ./build/ || true
-rm app-collection-proxy || true
+rm overlayer || true
+
+echo "Clean: Done"

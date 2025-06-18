@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
-	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/commands"
-	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/utils"
+	"github.com/STARRY-S/overlayer/pkg/commands"
+	"github.com/STARRY-S/overlayer/pkg/utils"
 )
 
 func main() {

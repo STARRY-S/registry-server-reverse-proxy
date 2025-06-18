@@ -34,7 +34,7 @@ runs:
         build-args: |
           TAG=${{ github.ref_name }}
           COMMIT=${{ github.sha }}
-        tags: ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:${{ github.ref_name }}-${{ env.ARCH }}
+        tags: ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:${{ github.ref_name }}-${{ env.ARCH }}
         platforms: "linux/${{ env.ARCH }}"
         file: package/Dockerfile
         sbom: true

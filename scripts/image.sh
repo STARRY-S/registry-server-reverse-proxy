@@ -6,7 +6,7 @@ set -exuo pipefail
 
 docker build \
     -f package/Dockerfile \
-    --tag registry-server-reverse-proxy \
+    --tag overlayer \
     .
 
 echo "image: Done"

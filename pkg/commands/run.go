@@ -3,8 +3,8 @@ package commands
 import (
 	"fmt"
 
-	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/config"
-	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/server"
+	"github.com/STARRY-S/overlayer/pkg/config"
+	"github.com/STARRY-S/overlayer/pkg/server"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

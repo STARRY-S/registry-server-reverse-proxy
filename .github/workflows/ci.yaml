@@ -53,7 +53,7 @@ jobs:
           build-args: |
             TAG=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
-          tags: ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/registry-server-reverse-proxy:dev
+          tags: ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/overlayer:dev
           platforms: "linux/amd64"
           file: package/Dockerfile
           sbom: true

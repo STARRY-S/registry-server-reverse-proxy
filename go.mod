@@ -1,8 +1,9 @@
-module github.com/STARRY-S/registry-server-reverse-proxy
+module github.com/STARRY-S/overlayer
 
 go 1.24
 
 require (
+	github.com/STARRY-S/registry-server-reverse-proxy v0.0.0-20250617085940-f4b50b773d5f
 	github.com/STARRY-S/simple-logrus-formatter v0.0.0-20250427025245-bdb535b56165
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1

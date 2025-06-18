@@ -1,8 +1,8 @@
-# Registry Server Reverse Proxy
+# Overlayer
 
-[![Push CI](https://github.com/STARRY-S/registry-server-reverse-proxy/actions/workflows/ci.yaml/badge.svg)](https://github.com/STARRY-S/registry-server-reverse-proxy/actions/workflows/ci.yaml)
+[![Push CI](https://github.com/STARRY-S/overlayer/actions/workflows/ci.yaml/badge.svg)](https://github.com/STARRY-S/overlayer/actions/workflows/ci.yaml)
 
-Reverse proxy for saving registry server CDN traffic costs.
+Overlayer is a reverse proxy designed to reduce CDN traffic costs for registry servers.
 
 ## License
 

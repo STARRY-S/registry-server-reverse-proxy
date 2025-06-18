@@ -9,6 +9,6 @@ set -exuo pipefail
 mkdir -p build && cd build
 
 CGO_ENABLED=0 \
-    go build -a -ldflags '-extldflags "-static"' -o proxy ../pkg/cmd
+    go build -a -ldflags '-extldflags "-static"' -o overlayer ../pkg/cmd
 
 echo "build: Done"

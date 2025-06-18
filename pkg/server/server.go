@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/config"
-	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/utils"
+	"github.com/STARRY-S/overlayer/pkg/config"
+	"github.com/STARRY-S/overlayer/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 )
