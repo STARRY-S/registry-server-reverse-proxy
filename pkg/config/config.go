@@ -17,8 +17,8 @@ type Config struct {
 	Port int `json:"listen" yaml:"listen"`
 
 	// TLS Certificate keypair
-	Cert string `json:"cert" yaml:"cert"`
-	Key  string `json:"key" yaml:"key"`
+	CertFile string `json:"certFile" yaml:"certFile"`
+	KeyFile  string `json:"keyFile" yaml:"keyFile"`
 
 	// RemoteURL is the remote URL of the registry server to be proxied
 	RemoteURL string `json:"remoteURL" yaml:"remoteURL"`
@@ -26,7 +26,7 @@ type Config struct {
 	// InsecureSkipTLSVerify, if true, will skip TLS verification for the proxied requests
 	InsecureSkipTLSVerify bool `json:"insecureSkipTLSVerify" yaml:"insecureSkipTLSVerify"`
 
-	Credential Credential `json:"credential" yaml:"credential"`
+	// Credential Credential `json:"credential" yaml:"credential"`
 
 	Repositories []Repository `json:"repositories" yaml:"repositories"`
 

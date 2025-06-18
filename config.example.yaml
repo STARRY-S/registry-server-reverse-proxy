@@ -1,14 +1,16 @@
+# Reverse Proxy Server URL
 serverURL: http://127.0.0.1:8080
+# Bind Address
 bindAddr: 127.0.0.1
 listen: 8080
-cert: ""
-key: ""
+
+# TLS Certificate
+certFile: ""
+keyFile: ""
+
+# Remote registry server
 remoteURL: http://registry.example.com
-hookLocation: true
 insecureSkipTLSVerify: false
-credential:
-  usernameEnvKey: REGISTRY_USERNAME
-  passwordEnvKey: REGISTRY_PASSWORD
 repositories:
   - name: library
     private: false
@@ -16,13 +18,16 @@ repositories:
     private: true
   - name: test2
     private: true
+
+# Other custom routes
 customRoutes:
   - prefix: /text
     plainText:
-      content: This is a plain text response
+      content: |
+          This is a plain text response
       status: 200
   - prefix: /favicon.ico
     plainText:
       content: |
-        404 not found
+          404 not found
       status: 404

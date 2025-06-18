@@ -12,15 +12,11 @@ func Test_Config(t *testing.T) {
 		ServerURL: "http://registry.abc.local:8080",
 		BindAddr:  "127.0.0.1",
 		Port:      8080,
-		Cert:      "",
-		Key:       "",
+		CertFile:  "",
+		KeyFile:   "",
 
 		RemoteURL:             "http://registry.example.com",
 		InsecureSkipTLSVerify: false,
-		Credential: Credential{
-			UsernameEnvKey: "REGISTRY_USERNAME",
-			PasswordEnvKey: "REGISTRY_PASSWORD",
-		},
 		// Example repositories
 		Repositories: []Repository{
 			{

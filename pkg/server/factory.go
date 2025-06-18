@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/utils"
+	"github.com/STARRY-S/overlayer/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
 

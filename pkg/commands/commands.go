@@ -3,7 +3,7 @@ package commands
 import (
 	"context"
 
-	"github.com/STARRY-S/registry-server-reverse-proxy/pkg/signal"
+	"github.com/STARRY-S/overlayer/pkg/signal"
 	"github.com/spf13/cobra"
 )
 
