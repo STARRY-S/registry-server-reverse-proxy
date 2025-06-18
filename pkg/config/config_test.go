@@ -17,6 +17,14 @@ func Test_Config(t *testing.T) {
 
 		RemoteURL:             "http://registry.example.com",
 		InsecureSkipTLSVerify: false,
+
+		RedirectBlobsLocation: RedirectBlobsLocation{
+			Enabled: true, // Enable redirect blobs to CDN cached URL
+			URL:     "https://cdn-blobs.example.com",
+			AuthConfig: CDNAuthConfig{
+				TokenEnvKey: "BLOBS_CDN_AUTH_TOKEN", // ENV Key for auth token
+			},
+		},
 		// Example repositories
 		Repositories: []Repository{
 			{

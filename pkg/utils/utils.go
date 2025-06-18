@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -173,4 +174,19 @@ func DetectURLType(rawURL string) string {
 		return "blobs"
 	}
 	return ""
+}
+
+func UTCTimestamp() int64 {
+	return time.Now().UTC().Unix()
+}
+
+// https://cloud.tencent.com/document/product/228/41625
+func SignTypeD(path, token string, timestamp int64) string {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	// hash = sha256sum(pkeyuritimestamp)
+	s := fmt.Sprintf("%v%v%v", token, path, timestamp)
+	hash := sha256.Sum256([]byte(s))
+	return fmt.Sprintf("%x", hash[:])
 }

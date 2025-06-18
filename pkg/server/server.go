@@ -25,7 +25,12 @@ type registryServer struct {
 	cert string
 	key  string
 
-	remoteURL             *url.URL // the proxied remote registry URL
+	remoteURL *url.URL // the proxied remote registry URL
+
+	redirectBlobs  bool     // Enable redirect public blobs to CDN cached URL
+	blobsURL       *url.URL // CDN cached blobs URL
+	blobsAuthToken string   // CDN Auth Token
+
 	insecureSkipTLSVerify bool
 
 	// Manifest index proxy map, the manifest index should not be cached by CDN
@@ -50,17 +55,23 @@ func NewRegistryServer(
 ) (*registryServer, error) {
 	var err error
 	s := &registryServer{
-		serverURL:             nil,
-		addr:                  c.BindAddr,
-		port:                  c.Port,
-		remoteURL:             nil,
+		serverURL: nil,
+		addr:      c.BindAddr,
+		port:      c.Port,
+		remoteURL: nil,
+
+		redirectBlobs:  c.RedirectBlobsLocation.Enabled,
+		blobsURL:       nil,
+		blobsAuthToken: "",
+
 		insecureSkipTLSVerify: c.InsecureSkipTLSVerify,
-		errCh:                 make(chan error),
-		manifestProxyMap:      make(map[string]*httputil.ReverseProxy),
-		blobsProxyMap:         make(map[string]*httputil.ReverseProxy),
-		apiProxy:              nil,
-		plaintextProxyMap:     make(map[string]config.PlainText),
-		staticFileProxyMap:    make(map[string]string),
+
+		errCh:              make(chan error),
+		manifestProxyMap:   make(map[string]*httputil.ReverseProxy),
+		blobsProxyMap:      make(map[string]*httputil.ReverseProxy),
+		apiProxy:           nil,
+		plaintextProxyMap:  make(map[string]config.PlainText),
+		staticFileProxyMap: make(map[string]string),
 	}
 	s.serverURL, err = url.Parse(c.ServerURL)
 	if err != nil {
@@ -69,6 +80,18 @@ func NewRegistryServer(
 	s.remoteURL, err = url.Parse(c.RemoteURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse remote URL %s: %w", c.RemoteURL, err)
+	}
+	if s.redirectBlobs {
+		s.blobsURL, err = url.Parse(c.RedirectBlobsLocation.URL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse blobs URL %s: %w",
+				c.RedirectBlobsLocation.URL, err)
+		}
+		if c.RedirectBlobsLocation.AuthConfig.TokenEnvKey != "" {
+			s.blobsAuthToken = os.Getenv(c.RedirectBlobsLocation.AuthConfig.TokenEnvKey)
+		} else {
+			s.blobsAuthToken = c.RedirectBlobsLocation.AuthConfig.Token
+		}
 	}
 	if err := s.registerAPIFactory(); err != nil {
 		return nil, fmt.Errorf("failed to register API factory: %w", err)
@@ -110,9 +133,14 @@ func (s *registryServer) registerManifestFactory(r *config.Repository) error {
 	// https://registry_url/v2/REPO_NAME/manifests/latest
 	manifestPrefixURL := s.remoteURL.JoinPath("v2", r.Name)
 	f := &factory{
-		kind:                  ManifestFactory,
-		localURL:              s.serverURL,
-		remoteURL:             s.remoteURL,
+		kind:      ManifestFactory,
+		localURL:  s.serverURL,
+		remoteURL: s.remoteURL,
+
+		redirectBlobs:  s.redirectBlobs,
+		blobsURL:       s.blobsURL,
+		blobsAuthToken: s.blobsAuthToken,
+
 		prefixURL:             manifestPrefixURL,
 		insecureSkipTLSVerify: s.insecureSkipTLSVerify,
 	}
@@ -131,10 +159,15 @@ func (s *registryServer) registerBlobsFactory(r *config.Repository) error {
 	// https://registry_url/v2/REPO_NAME/blobs/sha256:aabbccdd....
 	blobsPrefixURL := s.remoteURL.JoinPath("v2", r.Name, "blobs")
 	f := &factory{
-		kind:                  BlobsFactory,
-		localURL:              s.serverURL,
-		remoteURL:             s.remoteURL,
-		prefixURL:             blobsPrefixURL,
+		kind:      BlobsFactory,
+		localURL:  s.serverURL,
+		remoteURL: s.remoteURL,
+		prefixURL: blobsPrefixURL,
+
+		redirectBlobs:  s.redirectBlobs,
+		blobsURL:       s.blobsURL,
+		blobsAuthToken: s.blobsAuthToken,
+
 		privateRepo:           r.Private,
 		insecureSkipTLSVerify: s.insecureSkipTLSVerify,
 	}
@@ -152,10 +185,15 @@ func (s *registryServer) registerBlobsFactory(r *config.Repository) error {
 func (s *registryServer) registerAPIFactory() error {
 	// https://registry_url/
 	f := &factory{
-		kind:                  APIFactory,
-		localURL:              s.serverURL,
-		remoteURL:             s.remoteURL,
-		prefixURL:             s.remoteURL,
+		kind:      APIFactory,
+		localURL:  s.serverURL,
+		remoteURL: s.remoteURL,
+		prefixURL: s.remoteURL,
+
+		redirectBlobs:  s.redirectBlobs,
+		blobsURL:       s.blobsURL,
+		blobsAuthToken: s.blobsAuthToken,
+
 		privateRepo:           true, // Set to true for other API requests
 		insecureSkipTLSVerify: s.insecureSkipTLSVerify,
 	}
@@ -234,6 +272,10 @@ func (s *registryServer) initServer() error {
 	s.mux = http.NewServeMux()
 	s.mux.HandleFunc("/", s.ServeHTTP)
 	addr := fmt.Sprintf("%v:%v", s.addr, s.port)
+	scheme := "http"
+	if s.cert != "" && s.key != "" {
+		scheme = "https"
+	}
 	s.server = &http.Server{
 		Addr:              addr,
 		Handler:           s.mux,
@@ -245,7 +287,7 @@ func (s *registryServer) initServer() error {
 	if err := http2.ConfigureServer(s.server, &http2.Server{}); err != nil {
 		return fmt.Errorf("failed to configure http2 server: %v", err)
 	}
-	logrus.Infof("server listen on %v://%v", s.serverURL.Scheme, addr)
+	logrus.Infof("server listen on %v://%v", scheme, addr)
 	return nil
 }
 
@@ -268,13 +310,10 @@ func (s *registryServer) Serve(ctx context.Context) error {
 	}
 	go func() {
 		var err error
-		switch s.serverURL.Scheme {
-		case "http":
+		if s.cert == "" {
 			err = s.server.ListenAndServe()
-		case "https":
+		} else {
 			err = s.server.ListenAndServeTLS(s.cert, s.key)
-		default:
-			err = fmt.Errorf("unsupported url scheme %q", s.serverURL.Scheme)
 		}
 
 		if err != nil {

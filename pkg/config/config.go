@@ -28,6 +28,8 @@ type Config struct {
 
 	// Credential Credential `json:"credential" yaml:"credential"`
 
+	RedirectBlobsLocation RedirectBlobsLocation `json:"redirectBlobsLocation" yaml:"redirectBlobsLocation"`
+
 	Repositories []Repository `json:"repositories" yaml:"repositories"`
 
 	// CustomRoutes is the list of other custom routes to be proxied
@@ -63,6 +65,24 @@ type Route struct {
 
 	// Static file responses the file content if Remote and PlainText not set
 	StaticFile string `json:"staticFile,omitempty" yaml:"staticFile,omitempty"`
+}
+
+type RedirectBlobsLocation struct {
+	// If Enabled, this reverse proxy server will redirect the public image blobs
+	// to another CDN cached URL.
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	URL string `json:"url" yaml:"url"`
+
+	AuthConfig CDNAuthConfig `json:"authConfig" yaml:"authConfig"`
+}
+
+type CDNAuthConfig struct {
+	// AuthConfig currently supports TencentCloud CDN authentication TypeD (sha256sum)
+	// https://cloud.tencent.com/document/product/228/41625
+
+	Token       string `json:"token,omitempty" yaml:"token,omitempty"`
+	TokenEnvKey string `json:"tokenEnvKey,omitempty" yaml:"tokenEnvKey,omitempty"`
 }
 
 type PlainText struct {

@@ -8,6 +8,15 @@ listen: 8080
 certFile: ""
 keyFile: ""
 
+# Enable the redirect blobs to CDN cached URL
+redirectBlobsLocation:
+  enabled: true
+  url: https://cdn-blobs.example.com
+  authConfig:
+    # CDN auth token
+    # https://cloud.tencent.com/document/product/228/41625
+    tokenEnvKey: BLOBS_CDN_AUTH_TOKEN # Env Key for Auth Token
+
 # Remote registry server
 remoteURL: http://registry.example.com
 insecureSkipTLSVerify: false
@@ -24,10 +33,10 @@ customRoutes:
   - prefix: /text
     plainText:
       content: |
-          This is a plain text response
+        This is a plain text response
       status: 200
   - prefix: /favicon.ico
     plainText:
       content: |
-          404 not found
+        404 not found
       status: 404
