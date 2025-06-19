@@ -28,6 +28,7 @@ FROM registry.suse.com/bci/python:3.12 AS server
 
 COPY --from=build /usr/local/bin/proxy /usr/local/bin/
 COPY config.example.yaml /config.yaml
+COPY static /static
 
 # Run Registry Reverse Proxy Server
 ENTRYPOINT [ "proxy" ]

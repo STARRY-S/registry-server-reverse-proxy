@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -41,9 +42,9 @@ type registryServer struct {
 	apiProxy *httputil.ReverseProxy
 
 	// Custom plaintext proxy map, can be cached by CDN in a short period
-	plaintextProxyMap map[string]config.PlainText // map[prefix]PlainText
+	plaintextProxySet map[config.Route]bool // map[route]true
 	// Custom static file proxy map, can be cached by CDN in a short period
-	staticFileProxyMap map[string]string // map[prefix]FilePath
+	staticFileProxySet map[config.Route]bool // map[route]true
 
 	server *http.Server   // HTTP2 server
 	mux    *http.ServeMux // HTTP request multiplexer
@@ -70,8 +71,8 @@ func NewRegistryServer(
 		manifestProxyMap:   make(map[string]*httputil.ReverseProxy),
 		blobsProxyMap:      make(map[string]*httputil.ReverseProxy),
 		apiProxy:           nil,
-		plaintextProxyMap:  make(map[string]config.PlainText),
-		staticFileProxyMap: make(map[string]string),
+		plaintextProxySet:  make(map[config.Route]bool),
+		staticFileProxySet: make(map[config.Route]bool),
 	}
 	s.serverURL, err = url.Parse(c.ServerURL)
 	if err != nil {
@@ -103,17 +104,12 @@ func NewRegistryServer(
 	}
 
 	for _, r := range c.CustomRoutes {
-		if r.Prefix == "" {
-			logrus.Warnf("ignore route %q: prefix not set", r.Name)
-			continue
-		}
-
 		if r.PlainText != nil {
-			s.registerPlainText(r.Prefix, r.PlainText)
+			s.registerPlainText(r)
 			continue
 		}
 		if r.StaticFile != "" {
-			s.registerStaticFile(r.Prefix, r.StaticFile)
+			s.registerStaticFile(r)
 			continue
 		}
 	}
@@ -121,12 +117,12 @@ func NewRegistryServer(
 	return s, nil
 }
 
-func (s *registryServer) registerPlainText(prefix string, c *config.PlainText) {
-	s.plaintextProxyMap[prefix] = *c
+func (s *registryServer) registerPlainText(r config.Route) {
+	s.plaintextProxySet[r] = true
 }
 
-func (s *registryServer) registerStaticFile(prefix string, f string) {
-	s.staticFileProxyMap[prefix] = f
+func (s *registryServer) registerStaticFile(r config.Route) {
+	s.staticFileProxySet[r] = true
 }
 
 func (s *registryServer) registerManifestFactory(r *config.Repository) error {
@@ -238,33 +234,52 @@ func (s *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		for prefix, plainText := range s.plaintextProxyMap {
-			if !strings.HasPrefix(path, prefix) {
+		for r := range s.plaintextProxySet {
+			if !matchCustomRoute(&r, path) {
 				continue
 			}
-			if plainText.Status != 0 {
-				w.WriteHeader(plainText.Status)
+
+			if r.PlainText.Status != 0 {
+				w.WriteHeader(r.PlainText.Status)
 			}
-			w.Write([]byte(plainText.Content))
-			logrus.Debugf("response plaintext prefix [%v] status [%v] content [%v]",
-				prefix, plainText.Status, strings.TrimSpace(plainText.Content))
+			w.Write([]byte(r.PlainText.Content))
+			logrus.Debugf("response plaintext path [%v] status [%v] content [%v]",
+				path, r.PlainText.Status, r.PlainText.Content)
 			return
 		}
 
-		for prefix, fileName := range s.staticFileProxyMap {
-			if !strings.HasPrefix(path, prefix) {
+		for r := range s.staticFileProxySet {
+			if !matchCustomRoute(&r, path) {
 				continue
 			}
-			b, err := os.ReadFile(fileName)
-			if err != nil {
-				logrus.Warnf("failed to read file %q: %v", fileName, err)
+			if r.StaticFile == "" {
+				continue
 			}
-			w.Write(b)
+
+			f, err := os.Open(r.StaticFile)
+			if err != nil {
+				logrus.Warnf("failed to open file %q: %v", r.StaticFile, err)
+				if os.IsNotExist(err) {
+					w.WriteHeader(http.StatusNotFound)
+					w.Write([]byte(err.Error()))
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+			}
+			defer f.Close()
+
+			if _, err := io.Copy(w, f); err != nil {
+				logrus.Errorf("Failed to response file content: %q: %v",
+					r.StaticFile, err)
+				return
+			}
 			logrus.Debugf("response file [%v] prefix [%v]",
-				fileName, prefix)
+				r.StaticFile, path)
 			return
 		}
 	}
+
 	s.apiProxy.ServeHTTP(w, r)
 }
 
@@ -321,4 +336,14 @@ func (s *registryServer) Serve(ctx context.Context) error {
 		}
 	}()
 	return s.waitServerShutDown(ctx)
+}
+
+func matchCustomRoute(r *config.Route, path string) bool {
+	switch {
+	case r.Path != "":
+		return r.Path == path
+	case r.Prefix != "":
+		return strings.HasPrefix(path, r.Prefix)
+	}
+	return false
 }

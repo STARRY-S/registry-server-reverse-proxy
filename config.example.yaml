@@ -30,13 +30,15 @@ repositories:
 
 # Other custom routes
 customRoutes:
-  - prefix: /text
+  - path: /
     plainText:
       content: |
-        This is a plain text response
+        Hello World
+      status: 200
+  - prefix: /ping
+    plainText:
+      content: |
+        pong
       status: 200
   - prefix: /favicon.ico
-    plainText:
-      content: |
-        404 not found
-      status: 404
+    staticFile: /static/favicon.ico

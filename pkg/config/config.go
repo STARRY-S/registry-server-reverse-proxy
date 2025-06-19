@@ -57,6 +57,9 @@ type Route struct {
 	// Name is the name of the route
 	Name string `json:"name,omitempty" yaml:"name,omitempty"`
 
+	// Path matches the exact URL path to be proxied
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
+
 	// Prefix matches the URL prefix to be proxied
 	Prefix string `json:"prefix" yaml:"prefix"`
 

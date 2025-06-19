@@ -42,6 +42,13 @@ func Test_Config(t *testing.T) {
 		},
 		CustomRoutes: []Route{
 			{
+				Path: "/",
+				PlainText: &PlainText{
+					Content: "Hello World\n",
+					Status:  200,
+				},
+			},
+			{
 				Prefix: "/text",
 				PlainText: &PlainText{
 					Content: "This is a plain text response\n",
@@ -49,11 +56,8 @@ func Test_Config(t *testing.T) {
 				},
 			},
 			{
-				Prefix: "/favicon.ico",
-				PlainText: &PlainText{
-					Content: "404 not found\n",
-					Status:  404,
-				},
+				Prefix:     "/favicon.ico",
+				StaticFile: "static/favicon.ico",
 			},
 		},
 	}
