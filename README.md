@@ -1,6 +1,9 @@
 # Overlayer
 
-[![Push CI](https://github.com/STARRY-S/overlayer/actions/workflows/ci.yaml/badge.svg)](https://github.com/STARRY-S/overlayer/actions/workflows/ci.yaml)
+[![CI](https://github.com/STARRY-S/overlayer/actions/workflows/ci.yaml/badge.svg)](https://github.com/STARRY-S/overlayer/actions/workflows/ci.yaml)
+[![GitHub Release](https://img.shields.io/github/v/release/STARRY-S/overlayer?include_prereleases)](https://github.com/STARRY-S/overlayer/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/STARRY-S/overlayer)](https://goreportcard.com/report/github.com/STARRY-S/overlayer)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Overlayer is a reverse proxy designed to reduce CDN traffic costs for registry servers.
 
