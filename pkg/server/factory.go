@@ -71,7 +71,7 @@ func (f *factory) defaultDirector(r *http.Request) {
 
 	// Dump request debug data
 	if logrus.GetLevel() >= logrus.DebugLevel {
-		b, err := httputil.DumpRequest(r, true)
+		b, err := httputil.DumpRequest(r, false)
 		if err != nil {
 			logrus.Debugf("failed to dump request: %v", err)
 		} else {
