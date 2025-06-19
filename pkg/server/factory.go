@@ -61,6 +61,8 @@ type factory struct {
 	director       func(r *http.Request)
 	modifyResponse func(r *http.Response) error
 	errorHandler   func(w http.ResponseWriter, r *http.Request, err error)
+
+	serverErrCh chan error
 }
 
 func (f *factory) defaultDirector(r *http.Request) {
@@ -237,8 +239,19 @@ func (f *factory) defaultModifyResponse(r *http.Response) error {
 func (f *factory) defaultErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	logrus.Errorf("Error on %v factory handler [%v]: %v",
 		f.kind.String(), r.URL.Path, err)
+	b, _ := httputil.DumpRequest(r, true)
+	logrus.Errorf("%v Factory failed request %q\n%v\n=========================\n",
+		f.kind.String(), r.URL.String(), string(b))
+
 	w.WriteHeader(http.StatusBadGateway)
-	w.Write([]byte(fmt.Sprintf("%v", err)))
+	w.Write(fmt.Appendf(nil, "%v", err))
+
+	if strings.Contains(err.Error(), http.StatusText(http.StatusBadGateway)) {
+		if f.serverErrCh == nil {
+			return
+		}
+		f.serverErrCh <- fmt.Errorf("server failed on proxy error: %w", err)
+	}
 }
 
 // Proxy generates the ReverseProxy server

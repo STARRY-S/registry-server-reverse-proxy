@@ -67,12 +67,13 @@ func NewRegistryServer(
 
 		insecureSkipTLSVerify: c.InsecureSkipTLSVerify,
 
-		errCh:              make(chan error),
 		manifestProxyMap:   make(map[string]*httputil.ReverseProxy),
 		blobsProxyMap:      make(map[string]*httputil.ReverseProxy),
 		apiProxy:           nil,
 		plaintextProxySet:  make(map[config.Route]bool),
 		staticFileProxySet: make(map[config.Route]bool),
+
+		errCh: make(chan error),
 	}
 	s.serverURL, err = url.Parse(c.ServerURL)
 	if err != nil {
@@ -139,6 +140,8 @@ func (s *registryServer) registerManifestFactory(r *config.Repository) error {
 
 		prefixURL:             manifestPrefixURL,
 		insecureSkipTLSVerify: s.insecureSkipTLSVerify,
+
+		serverErrCh: s.errCh,
 	}
 	f.errorHandler = f.defaultErrorHandler
 	f.modifyResponse = f.defaultModifyResponse
@@ -166,6 +169,8 @@ func (s *registryServer) registerBlobsFactory(r *config.Repository) error {
 
 		privateRepo:           r.Private,
 		insecureSkipTLSVerify: s.insecureSkipTLSVerify,
+
+		serverErrCh: s.errCh,
 	}
 	f.errorHandler = f.defaultErrorHandler
 	f.modifyResponse = f.defaultModifyResponse
@@ -192,6 +197,8 @@ func (s *registryServer) registerAPIFactory() error {
 
 		privateRepo:           true, // Set to true for other API requests
 		insecureSkipTLSVerify: s.insecureSkipTLSVerify,
+
+		serverErrCh: s.errCh,
 	}
 	f.errorHandler = f.defaultErrorHandler
 	f.modifyResponse = f.defaultModifyResponse
@@ -309,6 +316,9 @@ func (s *registryServer) initServer() error {
 func (s *registryServer) waitServerShutDown(ctx context.Context) error {
 	select {
 	case err := <-s.errCh:
+		timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*5)
+		s.server.Shutdown(timeoutCtx)
+		cancel()
 		return err
 	case <-ctx.Done():
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
