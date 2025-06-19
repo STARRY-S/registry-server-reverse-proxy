@@ -93,11 +93,12 @@ func (f *factory) hookLocationHeader(r *http.Response) error {
 
 	switch r.Request.Method {
 	case http.MethodGet, http.MethodHead:
-		// Hook the location header for HEAD/GET request
-		if f.privateRepo {
+		switch f.kind {
+		case BlobsFactory:
+			return f.locationHookGetPublic(r, location)
+		default:
 			return f.locationHookGetPrivate(r, location)
 		}
-		return f.locationHookGetPublic(r, location)
 	default:
 		// For non GET/HEAD method, update the location URL directly
 		remote := f.remoteURL.String()
@@ -115,10 +116,6 @@ func (f *factory) locationHookGetPublic(r *http.Response, location string) error
 	if !f.redirectBlobs || f.blobsURL == nil {
 		return f.locationHookGetPrivate(r, location)
 	}
-
-	// remote := f.remoteURL.String()
-	// blobs := f.blobsURL.String()
-	// https://tcr-mkmmpryw-1315279809.cos.ap-guangzhou.myqcloud.com/docker/registry/v2/blobs/sha256/00/00aaef6746c84f5c57af47d3db9d84640a464c1f48c8f9f306babde0172e6040/data
 
 	lurl, err := url.Parse(location)
 	if err != nil {
