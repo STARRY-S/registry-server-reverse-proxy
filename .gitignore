@@ -40,5 +40,6 @@ config.yaml
 /*.zip
 *.log
 /build
+/certs
 
 .vscode/*.json

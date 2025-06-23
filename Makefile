@@ -6,6 +6,10 @@ build:
 image:
 	./scripts/image.sh
 
+.PHONY: cert
+cert:
+	./scripts/cert.sh
+
 .PHONY: test
 test:
 	./scripts/test.sh
