@@ -90,7 +90,7 @@ func NewRegistryServer(
 				c.RedirectBlobsLocation.URL, err)
 		}
 		if c.RedirectBlobsLocation.AuthConfig.TokenEnvKey != "" {
-			s.blobsAuthToken = os.Getenv(c.RedirectBlobsLocation.AuthConfig.TokenEnvKey)
+			s.blobsAuthToken = strings.TrimSpace(os.Getenv(c.RedirectBlobsLocation.AuthConfig.TokenEnvKey))
 		} else {
 			s.blobsAuthToken = c.RedirectBlobsLocation.AuthConfig.Token
 		}
