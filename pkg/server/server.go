@@ -61,6 +61,9 @@ func NewRegistryServer(
 		port:      c.Port,
 		remoteURL: nil,
 
+		cert: c.CertFile,
+		key:  c.KeyFile,
+
 		redirectBlobs:  c.RedirectBlobsLocation.Enabled,
 		blobsURL:       nil,
 		blobsAuthToken: "",
