@@ -70,6 +70,10 @@ linters:
     rules:
       - linters:
           - revive
+        path: pkg/utils/*
+        text: avoid meaningless package names
+      - linters:
+          - revive
         path: pkg/image/scan/report.go
         text: don't use ALL_CAPS in Go names
       # Permit cobra cmd as unused parameter
