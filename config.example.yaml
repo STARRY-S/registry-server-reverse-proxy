@@ -4,6 +4,10 @@ serverURL: http://127.0.0.1:8080
 bindAddr: 127.0.0.1
 listen: 8080
 
+# Permit requests with following headers
+allowedHeaders:
+  "ExampleHeader": "Value"
+
 # TLS Certificate
 certFile: ""
 keyFile: ""

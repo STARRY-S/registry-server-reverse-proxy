@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -22,6 +23,8 @@ type registryServer struct {
 	serverURL *url.URL // proxy server actual http url (localURL)
 	addr      string   // proxy server bind address
 	port      int      // proxy server bind port
+
+	allowedHeaders map[string]string
 
 	cert string
 	key  string
@@ -60,6 +63,8 @@ func NewRegistryServer(
 		addr:      c.BindAddr,
 		port:      c.Port,
 		remoteURL: nil,
+
+		allowedHeaders: maps.Clone(c.AllowedHeaders),
 
 		cert: c.CertFile,
 		key:  c.KeyFile,
@@ -226,6 +231,17 @@ func (s *registryServer) registerRepository(r *config.Repository) error {
 func (s *registryServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	logrus.Debugf("Proxy path [%v]", path)
+	if len(s.allowedHeaders) > 0 {
+		for k, v := range s.allowedHeaders {
+			if r.Header.Get(k) != v {
+				logrus.Infof("block [%v] request %q on header key %q mismatch:",
+					r.RemoteAddr, r.URL, k)
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+		}
+	}
+
 	switch utils.DetectURLType(path) {
 	case "manifest":
 		for repo, fn := range s.manifestProxyMap {

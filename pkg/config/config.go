@@ -16,6 +16,8 @@ type Config struct {
 	// Port is the port of the proxy server
 	Port int `json:"listen" yaml:"listen"`
 
+	AllowedHeaders map[string]string `json:"allowedHeaders" yaml:"allowedHeaders"`
+
 	// TLS Certificate keypair
 	CertFile string `json:"certFile" yaml:"certFile"`
 	KeyFile  string `json:"keyFile" yaml:"keyFile"`
